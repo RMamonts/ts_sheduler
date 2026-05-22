@@ -1,4 +1,5 @@
 import subprocess
+from pathlib import Path
 
 import streamlit as st
 
@@ -91,6 +92,18 @@ def remove_job(job_id):
         return False, str(e)
 
 
+# Function to get job output
+def get_job_output(job_id):
+    try:
+        result = subprocess.run(
+            ["bash", "-c", f'tail -n 10 "$(tsp -o {job_id})"'],
+            capture_output=True, text=True, timeout=5
+        )
+        return result.stdout or "No output yet or job not finished"
+    except Exception as e:
+        return str(e)
+
+
 # Function to clear all jobs
 def clear_queue():
     try:
@@ -117,8 +130,9 @@ if st.sidebar.button("🗑️ Clear All Jobs"):
 # Add command section
 st.header("Add branch to test")
 commit = st.text_input(
-    placeholder="e.g., ls -la, pwd, whoami, etc.",
-    help="Command will be added to the queue and executed sequentially",
+    "Branch name",
+    placeholder="e.g., feature/my-awesome-branch",
+    help="Branch name to test — will be added to the queue and executed sequentially",
 )
 
 col1, col2 = st.columns([1, 4])
@@ -126,8 +140,8 @@ with col1:
     add_btn = st.button("Add to Queue", type="primary", use_container_width=True)
 
 if add_btn and commit.strip():
-    venv_python = ""
-    main = ""
+    venv_python = Path(__file__).resolve().parents[2] / ".venv" / "bin" / "python"
+    main = Path(__file__).resolve()
 
     command = f"{venv_python} {main} --mamont-branch {commit}"
 
@@ -155,17 +169,17 @@ if jobs:
         ):
             st.write(f"**Command:** `{job['command']}`")
 
-            # View output button for each job
-            col1, col2, col3 = st.columns([1, 1, 1])
+            if st.button(f"📄 View Output #{job['id']}", key=f"output_{job['id']}"):
+                output = get_job_output(job["id"])
+                st.text_area("Output", output, height=200)
 
-            with col2:
-                if st.button(f"Remove Job #{job['id']}", key=f"remove_{job['id']}"):
-                    success, msg = remove_job(job["id"])
-                    if success:
-                        st.success(msg)
-                        st.rerun()
-                    else:
-                        st.error(msg)
+            if st.button(f"🗑️ Remove Job #{job['id']}", key=f"remove_{job['id']}"):
+                success, msg = remove_job(job["id"])
+                if success:
+                    st.success(msg)
+                    st.rerun()
+                else:
+                    st.error(msg)
 else:
     st.info("📭 Queue is empty. Add commands above to get started!")
 
