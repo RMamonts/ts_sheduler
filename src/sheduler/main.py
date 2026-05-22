@@ -162,20 +162,26 @@ jobs = parse_queue_status(queue_output)
 if jobs:
     st.write(f"**Total jobs in queue: {len(jobs)}**")
 
-    for idx, job in enumerate(jobs):
-        with st.expander(
-            f"Job #{job['id']} [{job['state']}]: {job['command'][:60]}..."
-            if len(job["command"]) > 60
-            else f"Job #{job['id']} [{job['state']}]: {job['command']}"
-        ):
-            st.write(f"**State:** `{job['state']}`")
-            st.write(f"**Command:** `{job['command']}`")
+if "outputs" not in st.session_state:
+    st.session_state.outputs = {}
 
-            if st.button(f"📄 View Output #{job['id']}", key=f"output_{job['id']}"):
-                output = get_job_output(job["id"])
-                st.text_area("Output", output, height=200)
+for idx, job in enumerate(jobs):
+    with st.expander(
+        f"Job #{job['id']} [{job['state']}]: {job['command'][:60]}..."
+        if len(job["command"]) > 60
+        else f"Job #{job['id']} [{job['state']}]: {job['command']}",
+        key=f"expander_{job['id']}",
+    ):
+        st.write(f"**State:** `{job['state']}`")
+        st.write(f"**Command:** `{job['command']}`")
 
-            if st.button(f"🗑️ Remove Job #{job['id']}", key=f"remove_{job['id']}"):
+        if st.button(f"📄 View Output #{job['id']}", key=f"output_btn_{job['id']}"):
+            st.session_state.outputs[job["id"]] = get_job_output(job["id"])
+
+        if job["id"] in st.session_state.outputs:
+            st.text_area("Output", st.session_state.outputs[job["id"]], height=200, key=f"output_{job['id']}")
+
+        if st.button(f"🗑️ Remove Job #{job['id']}", key=f"remove_{job['id']}"):
                 success, msg = remove_job(job["id"])
                 if success:
                     st.success(msg)
@@ -192,3 +198,5 @@ st.markdown("""
 - put branch name and relax
 - it will take a minute
 """)
+
+
