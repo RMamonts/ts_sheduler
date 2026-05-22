@@ -53,9 +53,7 @@ def get_queue_status():
             ["tsp", "-l"], capture_output=True, text=True, timeout=5
         )
         if result.returncode == 0:
-            header = "ID   State      Output               E-Level  Times(r/u/s)   Command [run=0/1]"
-            res = result.stdout.replace(header, "")
-            return res
+            return result.stdout
         return ""
     except Exception:
         return ""
@@ -68,16 +66,17 @@ def parse_queue_status(queue_output):
         return jobs
 
     lines = queue_output.strip().split("\n")
-    for line in lines:
-        # Parse ts -l output format
-        # Example: "1      username command..."
+    header = lines[0] if lines else ""
+    cmd_start = header.find("Command")
+
+    for line in lines[1:]:  # Skip header line
         if line.strip():
             parts = line.split()
-            if len(parts) >= 2:
+            if parts:
                 job_id = parts[0]
-                # The command is everything after the job ID and user
-                command = " ".join(parts[1:])
-                jobs.append({"id": job_id, "command": command})
+                state = parts[1] if len(parts) > 1 else ""
+                command = line[cmd_start:].strip() if cmd_start >= 0 else " ".join(parts[5:])
+                jobs.append({"id": job_id, "state": state, "command": command})
     return jobs
 
 
@@ -97,7 +96,9 @@ def get_job_output(job_id):
     try:
         result = subprocess.run(
             ["bash", "-c", f'tail -n 10 "$(tsp -o {job_id})"'],
-            capture_output=True, text=True, timeout=5
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         return result.stdout or "No output yet or job not finished"
     except Exception as e:
@@ -140,12 +141,12 @@ with col1:
     add_btn = st.button("Add to Queue", type="primary", use_container_width=True)
 
 if add_btn and commit.strip():
-    venv_python = Path(__file__).resolve().parents[2] / ".venv" / "bin" / "python"
-    main = Path(__file__).resolve()
+    # venv_python = Path(__file__).resolve().parents[2] / ".venv" / "bin" / "python"
+    # main = Path(__file__).resolve()
 
-    command = f"{venv_python} {main} --mamont-branch {commit}"
+    # command = f"{venv_python} {main} --mamont-branch {commit}"
 
-    success, msg = add_to_queue(command)
+    success, msg = add_to_queue(commit)
     if success:
         st.success(f"✅ {msg}")
     else:
@@ -163,10 +164,11 @@ if jobs:
 
     for idx, job in enumerate(jobs):
         with st.expander(
-            f"Job #{job['id']}: {job['command'][:60]}..."
+            f"Job #{job['id']} [{job['state']}]: {job['command'][:60]}..."
             if len(job["command"]) > 60
-            else f"Job #{job['id']}: {job['command']}"
+            else f"Job #{job['id']} [{job['state']}]: {job['command']}"
         ):
+            st.write(f"**State:** `{job['state']}`")
             st.write(f"**Command:** `{job['command']}`")
 
             if st.button(f"📄 View Output #{job['id']}", key=f"output_{job['id']}"):
